@@ -5,9 +5,7 @@ from torchvision.models import resnet18, ResNet18_Weights
 
 class PlateProvinceClassifier(nn.Module):
     """
-    Modelo de clasificación de imágenes para placas vehiculares.
-    
-    Objetivo:
+    Modelo de clasificación de imágenes para placas vehiculares de Ecuador
     - Recibir una imagen de una placa
     - Predecir a qué provincia pertenece
     - La provincia se determina por la primera letra de la placa
@@ -38,17 +36,11 @@ class PlateProvinceClassifier(nn.Module):
         # que ahora tendrá salida para nuestras 24 clases
         self.backbone.fc = nn.Linear(in_features, num_classes)
 
-        # Opcional: congelar el backbone para que no se actualicen sus pesos
-        # y entrenar solo la capa final.
-        # Esto sirve cuando:
-        # - tienes pocos datos
-        # - quieres entrenar más rápido
-        # - quieres evitar sobreajuste al inicio
+        # No se uso porque tenemos un dataset suficientemente grande 
         if freeze_backbone:
             for name, param in self.backbone.named_parameters():
                 param.requires_grad = False
 
-            # Muy importante:
             # si congelamos todo, debemos volver a habilitar la capa final
             # para que sí aprenda nuestras clases
             for param in self.backbone.fc.parameters():

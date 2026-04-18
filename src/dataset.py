@@ -7,18 +7,12 @@ from torch.utils.data import Dataset
 from PIL import Image
 from torchvision.transforms import v2
 
-
-# =========================================================
-# 1. Mapeo de letra inicial -> provincia
-# =========================================================
-# Según el enunciado del proyecto, la provincia de la placa
-# se obtiene a partir de la PRIMERA letra del nombre del archivo.
-#
+# Mapeo de letra inicial -> provincia
+# 
 # Ejemplo:
-#   AAB-1269.png -> A -> Azuay
+#   ABC-1234.png -> A -> Azuay
 #
-# Este diccionario nos permite convertir esa letra en el nombre
-# real de la provincia.
+# Diccionario para mapear la letra con la Provincia correspondiente.
 LETTER_TO_PROVINCE = {
     "A": "Azuay",
     "B": "Bolivar",
@@ -47,9 +41,8 @@ LETTER_TO_PROVINCE = {
 }
 
 
-# =========================================================
-# 2. Conversión de letras a índices de clase
-# =========================================================
+# Conversión de letras a índices de clase
+# 
 # PyTorch trabaja mejor con clases numéricas:
 #   A -> 0
 #   B -> 1
@@ -74,25 +67,16 @@ INDEX_TO_PROVINCE = {
 }
 
 
-# =========================================================
-# 3. Transformaciones para entrenamiento
-# =========================================================
-# Estas transformaciones se aplican SOLO durante entrenamiento.
-#
-# Objetivo:
-# - dar un poco de variación visual,
-# - mejorar generalización,
-# - pero sin destruir demasiado la placa.
-#
-# En la versión anterior las augmentations eran más agresivas.
-# Aquí las suavizamos para que sigan siendo realistas.
+# Transformaciones para entrenamiento
+# 
+# Estas transformaciones se aplican SOLO durante entrenamiento para poder:
+# - dar un poco de variación visual
+# - mejorar generalización
 train_transforms = v2.Compose([
-    # Redimensionar todas las imágenes al mismo tamaño
-    # para que entren uniformemente al modelo.
+    # Redimensionamos las imagenes a un solo tamañao para que el entrenamiento sea uniforme
     v2.Resize((128, 256)),
 
-    # Aplicar cambios leves de iluminación y contraste.
-    # Esto ayuda a que el modelo no dependa de un único tono.
+    # Aplicamos cambios leves de constraste e iluminacion para que al entrenar no vea el mismo tono sieempre
     v2.RandomApply([
         v2.ColorJitter(
             brightness=0.15,
@@ -101,24 +85,20 @@ train_transforms = v2.Compose([
         )
     ], p=0.5),
 
-    # Rotación muy pequeña.
-    # Esto simula una placa ligeramente inclinada,
-    # pero evita convertirla en algo irreal.
+    # Aplicamos una rotación muy pequeña.
     v2.RandomRotation(degrees=3),
 
-    # Traslación y escala muy suaves.
-    # Sirve para que el modelo no memorice una posición exacta.
+    # Realizamos movimientos de traslación y un poco de zoom
     v2.RandomAffine(
-        degrees=0,
-        translate=(0.03, 0.03),
-        scale=(0.97, 1.03)
+        degrees=0, # rando de rotacion
+        translate=(0.03, 0.03), # translacion eje x, eje y
+        scale=(0.97, 1.03) # zoom 97% lejos, 103% cerca
     ),
 
-    # Blur suave ocasional.
-    # Simula una imagen no totalmente nítida.
+    # Aplicamos un Blur o desenfoque para que la imagen no sea tan nitida
     v2.RandomApply([
-        v2.GaussianBlur(kernel_size=3)
-    ], p=0.2),
+        v2.GaussianBlur(kernel_size=3) # el tamaño de la matriz (3x3 pixeles) 
+    ], p=0.2), # indica el % de las imagenes que van a ser desenfocadas en este caso 20%
 
     # Convierte la imagen a formato tensor-image moderno de torchvision
     v2.ToImage(),
@@ -128,37 +108,18 @@ train_transforms = v2.Compose([
 ])
 
 
-# =========================================================
-# 4. Transformaciones para validación y test
-# =========================================================
+# Transformaciones para validación y test
+# 
 # Aquí NO usamos augmentations aleatorias.
-# Solo queremos medir el desempeño real del modelo sobre datos
-# de validación/test sin alterar la imagen.
 eval_transforms = v2.Compose([
-    # Redimensionar al mismo tamaño usado en entrenamiento
     v2.Resize((128, 256)),
-
-    # Convertir a tensor-image
     v2.ToImage(),
-
-    # Convertir a float32 y escalar a [0, 1]
     v2.ToDtype(torch.float32, scale=True)
 ])
 
 
-# =========================================================
-# 5. Dataset personalizado
-# =========================================================
+# Dataset personalizado
 class PlateProvinceDataset(Dataset):
-    """
-    Dataset para clasificar una placa vehicular en una de las 24 provincias.
-
-    La clase se obtiene a partir de la primera letra del nombre del archivo.
-
-    Ejemplo:
-        AAB-1269.png -> 'A' -> Azuay
-        PDH-2313.jpeg -> 'P' -> Pichincha
-    """
 
     def __init__(
         self,
@@ -170,8 +131,7 @@ class PlateProvinceDataset(Dataset):
         Parámetros:
         - image_dir: carpeta donde están las imágenes
         - transform: transformaciones a aplicar
-        - exclude_invalid: si True, ignora archivos cuya primera letra
-          no pertenezca a una provincia válida
+        - exclude_invalid: si True, ignora archivos cuya primera letra no pertenezca a una provincia válida
         """
         # Guardar parámetros de entrada
         self.image_dir = image_dir
@@ -186,14 +146,13 @@ class PlateProvinceDataset(Dataset):
         if not os.path.isdir(image_dir):
             raise FileNotFoundError(f"No existe la carpeta del dataset: {image_dir}")
 
-        # Patrones permitidos de archivo.
-        # Así aceptamos png, jpg y jpeg, tanto en minúsculas como mayúsculas.
+        # tipos de archivos permitidos
         patterns = ["*.png", "*.jpg", "*.jpeg", "*.PNG", "*.JPG", "*.JPEG"]
 
         # Lista temporal donde iremos acumulando todos los archivos encontrados
         all_files = []
 
-        # Buscar imágenes que cumplan cada patrón
+        # Buscar imágenes que cumplan con los tipos permitidos
         for pattern in patterns:
             all_files.extend(glob(os.path.join(image_dir, pattern)))
 
@@ -210,12 +169,7 @@ class PlateProvinceDataset(Dataset):
 
             # Si la letra no es válida, se ignora si exclude_invalid=True
             if first_letter not in LETTER_TO_INDEX:
-                if self.exclude_invalid:
-                    continue
-                else:
-                    # Aquí en el futuro se podría crear una clase especial
-                    # como "NO_APLICA", si el proyecto lo necesitara.
-                    continue
+                continue
 
             # Guardar ruta y etiqueta numérica correspondiente
             self.image_paths.append(image_path)

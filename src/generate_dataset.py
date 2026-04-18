@@ -5,9 +5,7 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 
 
-# =========================================================
-# 1. Mapeo oficial de letras válidas -> provincias
-# =========================================================
+# Mapeo de letras que representan a una provincia
 LETTER_TO_PROVINCE = {
     "A": "Azuay",
     "B": "Bolivar",
@@ -37,10 +35,7 @@ LETTER_TO_PROVINCE = {
 
 VALID_FIRST_LETTERS = list(LETTER_TO_PROVINCE.keys())
 
-
-# =========================================================
-# 2. Fuentes disponibles
-# =========================================================
+# Fuentes disponibles con las que vamos a generar las placas
 POSSIBLE_FONTS = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -49,9 +44,9 @@ POSSIBLE_FONTS = [
 ]
 
 
-# =========================================================
-# 3. Utilidades de generación
-# =========================================================
+# Funciones para la generacion de placas
+# random.choices permite que las letras se repitan (por ejemplo, puede salir "AAA")
+# .join une esos elementos en un solo bloque de texto (string). Ejemplo: "XRT".
 def random_letters(k: int) -> str:
     return "".join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ", k=k))
 
@@ -62,8 +57,7 @@ def random_numbers(k: int) -> str:
 
 def generate_plate_number():
     """
-    Genera una placa donde la primera letra sí corresponde
-    a una provincia válida del Ecuador.
+    Genera una placa donde la primera letra si esta mapeada en el LETTER_TO_PROVINCE.
     """
     first_letter = random.choice(VALID_FIRST_LETTERS)
 
@@ -77,7 +71,7 @@ def generate_plate_number():
 
 def get_random_font(font_size: int):
     """
-    Intenta cargar aleatoriamente una de las fuentes disponibles.
+    Intenta cargar aleatoriamente una de las fuentes de POSSIBLE_FONTS.
     Si falla, usa la fuente por defecto.
     """
     fonts = POSSIBLE_FONTS.copy()
@@ -93,16 +87,15 @@ def get_random_font(font_size: int):
     return ImageFont.load_default()
 
 
-# =========================================================
-# 4. Efectos visuales realistas
-# =========================================================
+# Efectos visuales realistas
 def add_sensor_noise(image, noise_std=6):
     """
     Agrega ruido suave tipo sensor de cámara.
     Mucho más realista que ruido RGB extremo.
     """
     img_np = np.array(image).astype(np.float32)
-
+    
+    # Generación del Ruido Gaussiano
     noise = np.random.normal(loc=0.0, scale=noise_std, size=img_np.shape)
     img_np = img_np + noise
 
@@ -217,9 +210,7 @@ def apply_perspective_transform(image):
     )
 
 
-# =========================================================
-# 5. Render de placa
-# =========================================================
+# Render de placa
 def render_plate(text, size=(404, 154), apply_augmentation=True):
     """
     Genera una placa sintética más parecida a una foto real recortada.
@@ -304,14 +295,10 @@ def render_plate(text, size=(404, 154), apply_augmentation=True):
 
     if apply_augmentation:
         # Perspectiva
-        # Antes: 0.65
-        # Ahora: más moderada para no deformar demasiado la placa
         if random.random() < 0.45:
             img = apply_perspective_transform(img)
 
         # Rotación leve
-        # Antes: hasta ±7 grados
-        # Ahora: un poco más controlada
         if random.random() < 0.65:
             angle = random.uniform(-5, 5)
             img = img.rotate(
@@ -322,36 +309,26 @@ def render_plate(text, size=(404, 154), apply_augmentation=True):
             )
 
         # Brillo
-        # Antes: 0.80 - 1.20
-        # Ahora: rango más realista
         if random.random() < 0.50:
             img = ImageEnhance.Brightness(img).enhance(
                 random.uniform(0.88, 1.12)
             )
 
         # Contraste
-        # Antes: 0.85 - 1.25
-        # Ahora: menos agresivo
         if random.random() < 0.50:
             img = ImageEnhance.Contrast(img).enhance(
                 random.uniform(0.90, 1.15)
             )
 
         # Gradiente de luz
-        # Antes: 0.45
-        # Ahora: menos frecuente
         if random.random() < 0.25:
             img = add_brightness_gradient(img)
 
         # Sombra
-        # Antes: 0.35
-        # Ahora: mucho más controlada
         if random.random() < 0.15:
             img = add_shadow_overlay(img)
 
         # Blur leve a moderado
-        # Antes: 0.40 con radio hasta 1.8
-        # Ahora: más suave y menos frecuente
         if random.random() < 0.25:
             img = img.filter(
                 ImageFilter.GaussianBlur(
@@ -360,8 +337,6 @@ def render_plate(text, size=(404, 154), apply_augmentation=True):
             )
 
         # Ruido sensor
-        # Antes: 0.45 con std hasta 10
-        # Ahora: más suave
         if random.random() < 0.25:
             img = add_sensor_noise(
                 img,
@@ -369,8 +344,6 @@ def render_plate(text, size=(404, 154), apply_augmentation=True):
             )
 
         # Compresión JPEG
-        # Antes: 0.50 con calidad 20-70
-        # Ahora: menos frecuente y menos destructiva
         if random.random() < 0.30:
             img = apply_jpeg_compression(
                 img,
@@ -378,8 +351,6 @@ def render_plate(text, size=(404, 154), apply_augmentation=True):
             )
 
         # Crop parcial leve y reescalado
-        # Antes: 0.50 y recorte más fuerte
-        # Ahora: más moderado
         if random.random() < 0.30:
             w, h = img.size
             left = random.randint(0, 10)
@@ -393,9 +364,7 @@ def render_plate(text, size=(404, 154), apply_augmentation=True):
     return img
 
 
-# =========================================================
-# 6. Generación de dataset
-# =========================================================
+# Generación de dataset
 def generate_dataset(
     output_dir="data/raw/synthetic_plates",
     num_images=30000,
@@ -436,15 +405,13 @@ def generate_dataset(
 
         img.save(save_path)
 
-    print(f"✅ Dataset generado correctamente en: {output_dir}")
-    print(f"✅ Total imágenes: {num_images}")
-    print(f"✅ Train: {train_count} ({(train_count/num_images)*100:.2f}%)")
-    print(f"✅ Test:  {test_count} ({(test_count/num_images)*100:.2f}%)")
+    print(f"Dataset generado correctamente en: {output_dir}")
+    print(f"Total imágenes: {num_images}")
+    print(f"Train: {train_count} ({(train_count/num_images)*100:.2f}%)")
+    print(f"Test:  {test_count} ({(test_count/num_images)*100:.2f}%)")
 
 
-# =========================================================
-# 7. Main
-# =========================================================
+# Main
 if __name__ == "__main__":
     generate_dataset(
         output_dir="data/raw/synthetic_plates",

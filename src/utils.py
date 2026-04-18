@@ -176,16 +176,13 @@ def train_model(
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
     for epoch in range(epochs):
-        # -------------------------------
+        
         # Entrenamiento
-        # -------------------------------
         train_loss, train_acc = train_one_epoch(
             model, train_loader, criterion, optimizer, device
         )
 
-        # -------------------------------
         # Validación
-        # -------------------------------
         val_loss, val_acc = validate_one_epoch(
             model, val_loader, criterion, device
         )
@@ -219,16 +216,16 @@ def train_model(
             best_val_acc = val_acc
             best_val_loss = val_loss
             torch.save(model.state_dict(), save_path)
-            print(f"  ✅ Mejor modelo guardado en: {save_path}")
+            print(f"Mejor modelo guardado en: {save_path}")
 
             # Reiniciar paciencia porque hubo mejora
             patience_counter = 0
         else:
             patience_counter += 1
-            print(f"  ⏳ Sin mejora ({patience_counter}/{patience})")
+            print(f"Sin mejora ({patience_counter}/{patience})")
 
             if patience_counter >= patience:
-                print("🛑 Early stopping activado")
+                print("Early stopping activado")
                 break
 
     # Cerrar TensorBoard writer
@@ -281,26 +278,6 @@ def plot_training_history(history, save_dir=None):
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
         plt.savefig(os.path.join(save_dir, "accuracy_curve.png"), bbox_inches="tight")
-
-    plt.show()
-
-
-def imagenpruebas(history, save_dir=None):
- 
-    epochs = range(1, 30 + 1)
-    
-    plt.figure(figsize=(8,4))
-    plt.plot(epochs, history["train_loss"], label="Train Loss")
-    plt.plot(epochs, history["val_loss"], label="Val Loss")
-    plt.plot(epochs, train_accuracies, label="Train Acc")
-    plt.plot(epochs, val_accuracies, label="Val Acc")
-    plt.xlabel("Epoch")
-    plt.legend()
-    plt.grid()
-
-    if save_dir:
-        os.makedirs(save_dir, exist_ok=True)
-        plt.savefig(os.path.join(save_dir, "imagenpruebas.png"), bbox_inches="tight")
 
     plt.show()
 
