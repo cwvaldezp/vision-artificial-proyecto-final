@@ -12,8 +12,8 @@ def calculate_accuracy(outputs, labels):
     - labels: etiquetas reales, forma [batch_size]
 
     Proceso:
-    - tomamos la clase con mayor puntaje usando argmax
-    - comparamos contra las etiquetas reales
+    - obtenemos la clase predicha usando argmax
+    - comparamos contra la etiqueta real
     - calculamos el porcentaje de aciertos
 
     Retorna:
@@ -41,8 +41,7 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device):
     - epoch_loss: pérdida promedio de la época
     - epoch_acc: accuracy promedio de la época
     """
-    # Ponemos el modelo en modo entrenamiento
-    # Esto es importante porque activa comportamientos como dropout o batchnorm en modo train
+    # Modo entrenamiento
     model.train()
 
     running_loss = 0.0
@@ -50,33 +49,31 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device):
     total_batches = 0
 
     for images, labels in dataloader:
-        # Enviamos imágenes y etiquetas al dispositivo correspondiente
+        # Enviar batch al dispositivo
         images = images.to(device)
         labels = labels.to(device)
 
-        # Ponemos en cero los gradientes acumulados de la iteración anterior
+        # Limpiar gradientes anteriores
         optimizer.zero_grad()
 
-        # Forward pass:
-        # el modelo genera una predicción para cada imagen del batch
+        # Forward pass
         outputs = model(images)
 
-        # Calculamos la pérdida comparando la salida del modelo con las etiquetas reales
+        # Calcular pérdida
         loss = criterion(outputs, labels)
 
-        # Backpropagation:
-        # calculamos gradientes de la pérdida respecto a los pesos
+        # Backpropagation
         loss.backward()
 
-        # Actualizamos los pesos del modelo
+        # Actualización de pesos
         optimizer.step()
 
-        # Acumulamos métricas para luego sacar promedios de toda la época
+        # Acumular métricas
         running_loss += loss.item()
         running_acc += calculate_accuracy(outputs, labels)
         total_batches += 1
 
-    # Promedio de pérdida y accuracy de la época
+    # Promedios de la época
     epoch_loss = running_loss / total_batches
     epoch_acc = running_acc / total_batches
 
@@ -87,23 +84,22 @@ def validate_one_epoch(model, dataloader, criterion, device):
     """
     Evalúa el modelo durante una época completa en validación o test.
 
-    Diferencia clave respecto a train:
-    - no se actualizan los pesos
-    - se usa model.eval()
-    - se usa torch.no_grad() para ahorrar memoria y acelerar evaluación
+    Diferencias respecto a entrenamiento:
+    - no actualiza pesos
+    - usa model.eval()
+    - usa torch.no_grad()
 
     Retorna:
     - epoch_loss: pérdida promedio
     - epoch_acc: accuracy promedio
     """
-    # Ponemos el modelo en modo evaluación
+    # Modo evaluación
     model.eval()
 
     running_loss = 0.0
     running_acc = 0.0
     total_batches = 0
 
-    # Desactivamos cálculo de gradientes porque no vamos a entrenar
     with torch.no_grad():
         for images, labels in dataloader:
             images = images.to(device)
@@ -122,16 +118,27 @@ def validate_one_epoch(model, dataloader, criterion, device):
     return epoch_loss, epoch_acc
 
 
-def train_model(model, train_loader, val_loader, criterion, optimizer, device, epochs=10,
-                save_path="outputs/models/best_model.pth"):
+def train_model(
+    model,
+    train_loader,
+    val_loader,
+    criterion,
+    optimizer,
+    device,
+    epochs=10,
+    save_path="outputs/models/best_model.pth",
+    patience=10,
+    writer=None
+):
     """
     Función principal de entrenamiento.
 
     Qué hace:
     - entrena el modelo por varias épocas
     - valida en cada época
-    - guarda el mejor modelo según validation accuracy
-    - devuelve un historial con métricas
+    - guarda el mejor modelo
+    - aplica early stopping si deja de mejorar
+    - guarda métricas en TensorBoard si se proporciona writer
 
     Parámetros:
     - model: modelo a entrenar
@@ -140,8 +147,10 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, device, e
     - criterion: función de pérdida
     - optimizer: optimizador
     - device: cpu o cuda
-    - epochs: número de épocas
+    - epochs: número máximo de épocas
     - save_path: ruta donde guardar el mejor modelo
+    - patience: número de épocas sin mejora antes de detener
+    - writer: SummaryWriter de TensorBoard (opcional)
 
     Retorna:
     - history: diccionario con pérdidas y accuracies por época
@@ -153,35 +162,78 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, device, e
         "val_acc": []
     }
 
+    # Mejor accuracy observado hasta el momento
     best_val_acc = 0.0
 
-    # Creamos la carpeta del modelo si no existe
+    # Mejor loss observado hasta el momento
+    # Sirve como criterio secundario cuando el accuracy empata
+    best_val_loss = float("inf")
+
+    # Contador para early stopping
+    patience_counter = 0
+
+    # Crear carpeta del modelo si no existe
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
     for epoch in range(epochs):
+        # -------------------------------
+        # Entrenamiento
+        # -------------------------------
         train_loss, train_acc = train_one_epoch(
             model, train_loader, criterion, optimizer, device
         )
 
+        # -------------------------------
+        # Validación
+        # -------------------------------
         val_loss, val_acc = validate_one_epoch(
             model, val_loader, criterion, device
         )
 
-        # Guardamos métricas en el historial
+        # Guardar historial
         history["train_loss"].append(train_loss)
         history["train_acc"].append(train_acc)
         history["val_loss"].append(val_loss)
         history["val_acc"].append(val_acc)
 
+        # Guardar en TensorBoard si existe writer
+        if writer is not None:
+            writer.add_scalar("Loss/Train", train_loss, epoch + 1)
+            writer.add_scalar("Loss/Validation", val_loss, epoch + 1)
+            writer.add_scalar("Accuracy/Train", train_acc, epoch + 1)
+            writer.add_scalar("Accuracy/Validation", val_acc, epoch + 1)
+
         print(f"Epoch [{epoch + 1}/{epochs}]")
         print(f"  Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f}")
         print(f"  Val   Loss: {val_loss:.4f} | Val   Acc: {val_acc:.4f}")
 
-        # Si el accuracy de validación mejora, guardamos el modelo
-        if val_acc > best_val_acc:
+        # Se considera mejora si:
+        # 1. sube el validation accuracy
+        # 2. o si el accuracy empata pero el validation loss baja
+        improved = (
+            (val_acc > best_val_acc) or
+            (val_acc == best_val_acc and val_loss < best_val_loss)
+        )
+
+        if improved:
             best_val_acc = val_acc
+            best_val_loss = val_loss
             torch.save(model.state_dict(), save_path)
             print(f"  ✅ Mejor modelo guardado en: {save_path}")
+
+            # Reiniciar paciencia porque hubo mejora
+            patience_counter = 0
+        else:
+            patience_counter += 1
+            print(f"  ⏳ Sin mejora ({patience_counter}/{patience})")
+
+            if patience_counter >= patience:
+                print("🛑 Early stopping activado")
+                break
+
+    # Cerrar TensorBoard writer
+    if writer is not None:
+        writer.close()
 
     return history
 
@@ -233,6 +285,25 @@ def plot_training_history(history, save_dir=None):
     plt.show()
 
 
+def imagenpruebas(history, save_dir=None):
+ 
+    epochs = range(1, 30 + 1)
+    
+    plt.figure(figsize=(8,4))
+    plt.plot(epochs, history["train_loss"], label="Train Loss")
+    plt.plot(epochs, history["val_loss"], label="Val Loss")
+    plt.plot(epochs, train_accuracies, label="Train Acc")
+    plt.plot(epochs, val_accuracies, label="Val Acc")
+    plt.xlabel("Epoch")
+    plt.legend()
+    plt.grid()
+
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+        plt.savefig(os.path.join(save_dir, "imagenpruebas.png"), bbox_inches="tight")
+
+    plt.show()
+
 def load_model_weights(model, weights_path, device):
     """
     Carga pesos guardados previamente en un modelo.
@@ -266,7 +337,7 @@ def predict_single_image(model, image_tensor, device):
     model.eval()
 
     with torch.no_grad():
-        # Agregamos dimensión batch: [C, H, W] -> [1, C, H, W]
+        # Agregar dimensión batch
         image_tensor = image_tensor.unsqueeze(0).to(device)
 
         outputs = model(image_tensor)
@@ -285,10 +356,6 @@ def show_predictions(model, dataset, device, index_to_province, num_images=5):
     - device: cpu o cuda
     - index_to_province: diccionario {indice: nombre_provincia}
     - num_images: cantidad de imágenes a mostrar
-
-    Nota:
-    - esta función es útil para el entregable, porque el profe pide mostrar
-      una imagen clasificada para demostrar que el modelo funciona.
     """
     model.eval()
 
@@ -297,10 +364,9 @@ def show_predictions(model, dataset, device, index_to_province, num_images=5):
     for i in range(num_images):
         image, label = dataset[i]
 
-        with torch.no_grad():
-            pred = predict_single_image(model, image, device)
+        pred = predict_single_image(model, image, device)
 
-        # Convertimos tensor a formato visualizable para matplotlib
+        # Tensor -> numpy para visualizar con matplotlib
         img_np = image.permute(1, 2, 0).cpu().numpy()
 
         plt.subplot(num_images, 1, i + 1)

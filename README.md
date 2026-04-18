@@ -47,7 +47,7 @@ Sucumbíos, Tungurahua, Zamora Chinchipe.
 vision-artificial-proyecto-final/
 ├── data/
 │ └── raw/
-│ └── synthethic_plates/
+│ └── synthetic_plates/
 │ ├── train/
 │ └── test/
 ├── notebooks/
